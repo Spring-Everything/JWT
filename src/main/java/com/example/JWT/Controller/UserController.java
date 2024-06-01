@@ -1,6 +1,5 @@
 package com.example.JWT.Controller;
 
-import com.example.JWT.Config.JWT.JwtTokenProvider;
 import com.example.JWT.DTO.JWTDTO;
 import com.example.JWT.DTO.UserDTO;
 import com.example.JWT.Service.UserService;
