@@ -1,2 +1,2 @@
 # JWT_Pratice
-Json Web Token 실습
+Json Web Token 연습
