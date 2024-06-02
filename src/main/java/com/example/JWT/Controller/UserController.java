@@ -8,6 +8,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Date;
+
 @RestController
 @RequestMapping("/user")
 @RequiredArgsConstructor
@@ -52,15 +54,33 @@ public class UserController {
 
     //회원 정보 수정
     @PutMapping("/{uid}")
-    public ResponseEntity<UserDTO> updateUser(@PathVariable String uid, @RequestBody UserDTO userDTO) {
-        UserDTO updatedUser = userService.updateUser(uid, userDTO);
+    public ResponseEntity<UserDTO> updateUser(@PathVariable String uid, @RequestHeader("Authorization") String token, @RequestBody UserDTO userDTO) {
+        token = token.startsWith("Bearer ") ? token.substring(7) : token;
+        UserDTO updatedUser = userService.updateUser(uid, token, userDTO);
         return ResponseEntity.ok(updatedUser);
     }
 
     //회원 탈퇴
     @DeleteMapping("/{uid}")
-    public ResponseEntity<Void> deleteUser(@PathVariable String uid) {
-        userService.deleteUser(uid);
+    public ResponseEntity<Void> deleteUser(@PathVariable String uid, @RequestHeader("Authorization") String token) {
+        token = token.startsWith("Bearer ") ? token.substring(7) : token;
+        userService.deleteUser(uid, token);
         return ResponseEntity.noContent().build();
+    }
+
+    //토큰 연장
+    @PostMapping("/extend-token")
+    public ResponseEntity<String> extendToken(@RequestHeader("Authorization") String token) {
+        token = token.startsWith("Bearer ") ? token.substring(7) : token;
+        String newToken = userService.extendToken(token);
+        return ResponseEntity.ok(newToken);
+    }
+
+    // 토큰 유효 시간 확인
+    @GetMapping("/time/token-remaining-time")
+    public ResponseEntity<?> getTokenRemainingTime(@RequestHeader("Authorization") String token) {
+        token = token.startsWith("Bearer ") ? token.substring(7) : token;
+            Long remainingTime = userService.getTokenRemainingTime(token);
+            return ResponseEntity.ok(remainingTime);
     }
 }
