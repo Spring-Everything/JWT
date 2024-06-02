@@ -8,6 +8,7 @@ import com.example.JWT.Config.JWT.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -27,9 +28,9 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserDTO createUser(UserDTO userDTO) {
         if (isUidDuplicate(userDTO.getUid())) {
-            throw new IllegalArgumentException("중복된 아이디가 존재합니다.");
+            throw new IllegalArgumentException("중복된 아이디가 존재합니다");
         } else if (isNicknameDuplicate(userDTO.getNickname())) {
-            throw new IllegalArgumentException("닉네임이 이미 존재합니다.");
+            throw new IllegalArgumentException("닉네임이 이미 존재합니다");
         }
         UserEntity userEntity = userDTO.dtoToEntity();
         userEntity.setPassword(passwordEncoder.encode(userDTO.getPassword()));
@@ -42,7 +43,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserDTO getUserByUid(String uid) {
         UserEntity userEntity = userRepository.findByUid(uid)
-                .orElseThrow(() -> new RuntimeException("유저의 uid가 " + uid + "인 사용자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new RuntimeException("유저의 uid가 " + uid + "인 사용자를 찾을 수 없습니다"));
         return UserDTO.entityToDto(userEntity);
     }
 
@@ -61,28 +62,33 @@ public class UserServiceImpl implements UserService {
     //로그인
     public JWTDTO login(String uid, String password) {
         UserEntity userEntity = userRepository.findByUid(uid)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다"));
 
         if (!passwordEncoder.matches(password, userEntity.getPassword())) {
-            throw new IllegalArgumentException("비밀번호가 일치하지 않습니다.");
+            throw new IllegalArgumentException("비밀번호가 일치하지 않습니다");
         }
 
         String token = jwtTokenProvider.generateToken(uid);
-        logger.info("로그인 성공! 새로운 토큰이 발급되었습니다.");
+        logger.info("로그인 성공! 새로운 토큰이 발급되었습니다");
         return new JWTDTO(token, UserDTO.entityToDto(userEntity));
     }
 
     //회원 정보 수정
     @Override
-    public UserDTO updateUser(String uid, String token, UserDTO userDTO) {
-        if (!jwtTokenProvider.validateToken(token, uid)) {
-            throw new RuntimeException("JWT 인증이 없습니다");
+    public UserDTO updateUser(String uid, UserDTO userDTO, UserDetails userDetails) {
+        if (!userDetails.getUsername().equals(uid)) {
+            throw new RuntimeException("권한이 없습니다");
         }
-        UserEntity userEntity = userRepository.findByUid(uid)
-                .orElseThrow(() -> new RuntimeException("유저의 uid가 " + uid + "인 사용자를 찾을 수 없습니다."));
 
-        userEntity.setPassword(passwordEncoder.encode(userDTO.getPassword()));
-        userEntity.setNickname(userDTO.getNickname());
+        UserEntity userEntity = userRepository.findByUid(uid)
+                .orElseThrow(() -> new RuntimeException("유저의 uid가 " + uid + "인 사용자를 찾을 수 없습니다"));
+
+        if (userDTO.getPassword() != null) {
+            userEntity.setPassword(passwordEncoder.encode(userDTO.getPassword()));
+        }
+        if (userDTO.getNickname() != null) {
+            userEntity.setNickname(userDTO.getNickname());
+        }
 
         UserEntity updatedUser = userRepository.save(userEntity);
         logger.info("사용자 정보 업데이트 완료! " + updatedUser);
@@ -91,26 +97,37 @@ public class UserServiceImpl implements UserService {
 
     //회원 탈퇴
     @Override
-    public void deleteUser(String uid, String token) {
-        if (!jwtTokenProvider.validateToken(token, uid)) {
-            throw new RuntimeException("JWT 인증이 없습니다");
+    public void deleteUser(String uid, UserDetails userDetails) {
+        if (!userDetails.getUsername().equals(uid)) {
+            throw new RuntimeException("권한이 없습니다");
         }
         UserEntity userEntity = userRepository.findByUid(uid)
-                .orElseThrow(() -> new RuntimeException("유저의 uid가 " + uid + "인 사용자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new RuntimeException("유저의 uid가 " + uid + "인 사용자를 찾을 수 없습니다"));
 
         userRepository.delete(userEntity);
         logger.info("유저의 uid가 " + uid + "인 회원탈퇴 완료!");
     }
 
-    //토큰 연장
-    @Override
-    public String extendToken(String token) {
-        return jwtTokenProvider.refreshToken(token);
-    }
-
     //토큰 유효 시간 확인
     @Override
-    public Long getTokenRemainingTime(String token) {
+    public Long getTokenRemainingTime(UserDetails userDetails) {
+        String uid = userDetails.getUsername();
+        String token = jwtTokenProvider.getActiveToken(uid); // 활성화된 토큰을 가져옵니다.
+        if (token == null || jwtTokenProvider.isTokenInvalid(token)) {
+            throw new IllegalArgumentException("유효하지 않거나 만료된 토큰입니다");
+        }
+        return jwtTokenProvider.getTokenRemainingTime(token);
+    }
+
+    //토큰 연장(오류나는 중)
+    @Override
+    public Long refreshToken(UserDetails userDetails) {
+        String uid = userDetails.getUsername();
+        String token = jwtTokenProvider.getActiveToken(uid);
+        if (token == null) {
+            throw new RuntimeException("활성화된 토큰이 없습니다.");
+        }
+        jwtTokenProvider.refreshToken(token);
         return jwtTokenProvider.getTokenRemainingTime(token);
     }
 }

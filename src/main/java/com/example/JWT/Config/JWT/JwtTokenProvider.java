@@ -121,17 +121,22 @@ public class JwtTokenProvider {
         }
     }
 
-    //JWT 토큰 유효기간 갱신
-    public String refreshToken(String token) {
+    //JWT 토큰 유효기간 갱신 (오류나는 중)
+    public void refreshToken(String token) {
         Claims claims = getAllClaimsFromToken(token);
         if (claims == null || isTokenExpired(token) || invalidTokens.contains(token)) {
             logger.error("토큰이 유효하지 않거나 만료되었습니다");
             throw new IllegalArgumentException("유효하지 않거나 만료된 토큰");
         }
+        // 만료 시간 갱신
+        claims.setExpiration(new Date(System.currentTimeMillis() + expiration));
         String uid = claims.getSubject();
-        String newToken = generateToken(uid);
+        String refreshedToken = Jwts.builder()
+                .setClaims(claims)
+                .signWith(key, SignatureAlgorithm.HS512)
+                .compact();
+        activeTokens.put(uid, refreshedToken); // 갱신된 토큰 저장
         logger.info("토큰의 기간이 연장되었습니다");
-        return newToken;
     }
 
     //JWT 토큰의 남은 유효 기간을 체크
@@ -150,5 +155,15 @@ public class JwtTokenProvider {
             return (expirationDate.getTime() - System.currentTimeMillis()) / 1000; // 초 단위로 남은 시간 반환
         }
         return null;
+    }
+
+    //활성화된 토큰을 가져오는 메서드
+    public String getActiveToken(String uid) {
+        return activeTokens.get(uid);
+    }
+
+    //무효화된 토큰을 확인하는 메서드
+    public boolean isTokenInvalid(String token) {
+        return invalidTokens.contains(token);
     }
 }
